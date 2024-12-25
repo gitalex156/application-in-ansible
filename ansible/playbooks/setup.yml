@@ -1,0 +1,74 @@
+---
+- name: Configure Yandex Cloud VM
+  hosts: all
+  become: true
+  vars:
+    bot_link: "https://t.me/OprosinfaBot"
+  tasks:
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Install required system packages
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - git
+          - nginx
+        state: present
+
+    - name: Ensure python3-venv is installed
+      apt:
+        name: python3-venv
+        state: present
+
+    - name: Ensure six Python module is installed
+      apt:
+        name: python3-six
+        state: present
+
+    - name: Create application directory
+      file:
+        path: /var/www/app
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Install virtualenv package
+      apt:
+        name: python3-virtualenv
+        state: present
+
+    - name: Create virtual environment
+      command: python3 -m venv /var/www/app/venv
+      when: not ansible_facts['ansible_virtualization_type'] is defined or ansible_virtualization_type != 'docker'
+
+    - name: Copy Nginx configuration
+      template:
+        src: ../templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/app
+      notify: restart nginx
+
+    - name: Copy HTML page
+      template:
+        src: ../templates/index.html.j2
+        dest: /var/www/app/index.html
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/app
+        dest: /etc/nginx/sites-enabled/app
+        state: link
+      notify: restart nginx
+
+  handlers:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted
